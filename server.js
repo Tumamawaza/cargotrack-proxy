@@ -5,13 +5,69 @@ const axios = require("axios");
 const app = express();
 const PORT = process.env.PORT || 3001;
 const MT_API_KEY = process.env.MT_API_KEY;
+const DD_API_KEY = process.env.DD_API_KEY;
+const DD_BASE = "https://datadocked.com/api/vessels_operations";
 
 app.use(cors());
 app.use(express.json());
 
 // Health check
 app.get("/", (req, res) => {
-  res.json({ status: "CargoTrack Proxy activo", mt_key_loaded: !!MT_API_KEY });
+  res.json({
+    status: "CargoTrack Proxy activo",
+    mt_key_loaded: !!MT_API_KEY,
+    dd_key_loaded: !!DD_API_KEY
+  });
+});
+
+// ── DataDocked: posición real de buque por IMO o MMSI ──
+app.get("/api/dd/location", async (req, res) => {
+  const { imo_or_mmsi } = req.query;
+  if (!DD_API_KEY) return res.status(500).json({ error: "DD_API_KEY no configurada" });
+  if (!imo_or_mmsi) return res.status(400).json({ error: "Se requiere imo_or_mmsi" });
+  try {
+    const { data } = await axios.get(`${DD_BASE}/get-vessel-location`, {
+      params: { imo_or_mmsi },
+      headers: { "x-api-key": DD_API_KEY },
+      timeout: 10000
+    });
+    res.json(data);
+  } catch (e) {
+    res.status(502).json({ error: "Error DataDocked", detail: e.message });
+  }
+});
+
+// ── DataDocked: buscar buque por nombre ──
+app.get("/api/dd/search", async (req, res) => {
+  const { name } = req.query;
+  if (!DD_API_KEY) return res.status(500).json({ error: "DD_API_KEY no configurada" });
+  if (!name) return res.status(400).json({ error: "Se requiere name" });
+  try {
+    const { data } = await axios.get(`${DD_BASE}/get-vessel-info`, {
+      params: { vessel_name: name },
+      headers: { "x-api-key": DD_API_KEY },
+      timeout: 10000
+    });
+    res.json(data);
+  } catch (e) {
+    res.status(502).json({ error: "Error DataDocked", detail: e.message });
+  }
+});
+
+// ── DataDocked: escalas portuarias del buque ──
+app.get("/api/dd/portcalls", async (req, res) => {
+  const { imo_or_mmsi } = req.query;
+  if (!DD_API_KEY) return res.status(500).json({ error: "DD_API_KEY no configurada" });
+  try {
+    const { data } = await axios.get(`${DD_BASE}/port-calls-by-vessel`, {
+      params: { imo_or_mmsi },
+      headers: { "x-api-key": DD_API_KEY },
+      timeout: 10000
+    });
+    res.json(data);
+  } catch (e) {
+    res.status(502).json({ error: "Error DataDocked", detail: e.message });
+  }
 });
 
 // Buscar buque por nombre
